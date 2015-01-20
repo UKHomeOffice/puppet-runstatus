@@ -6,7 +6,7 @@ require 'puppet/runstatus/version'
 Gem::Specification.new do |spec|
   spec.name          = "puppet-runstatus"
   spec.version       = Puppet::Runstatus::VERSION
-  spec.authors       = ["TODO: Write your name"]
+  spec.authors       = ["TODO: Adam Scarborough"]
   spec.email         = ["scarby@users.noreply.github.com"]
   spec.summary       = %q{TODO: Write a short summary. Required.}
   spec.description   = %q{TODO: Write a longer description. Optional.}
@@ -25,4 +25,5 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency('rake')
   spec.add_dependency('methadone', '~> 1.8.0')
   spec.add_development_dependency('rspec', '~> 2.99')
+  spec.add_dependency('ruby-puppetdb')
 end
