@@ -3,7 +3,10 @@
 require 'optparse'
 require 'methadone'
 #require 'puppet/runstatus'
-require 'JSON'
+require 'json'
+require 'puppetdb'
+require 'net/http'
+require 'net/https'
 
 class App
   include Methadone::Main
@@ -11,24 +14,29 @@ class App
 
   main do |server,puppetdbhost,puppetdbport| # Add args you want: |like,so|
     #need to run mcollective to find the last puppet run and status
-    runinfo = `mco rpc puppet status -j -F fqdn=/:server/`
+    command = "mco rpc puppet status -j -F fqdn=/" << server << "/"
+    runinfo = `#{command}`
     parsed = JSON.parse(runinfo)
+    parsed = parsed[0]
     status = parsed['statuscode']
-    if status != 0; then
-      hash = parsed['hash']
-      query = '"=","report", "' << parsed['hash'] <<'"'
+    status = status.to_i
+    if status != 1; then
+      certname = parsed['sender']
+      query= PuppetDB::Query[:'=','certname',"#{certname}"]
       #puppet run failed - need to query puppetdb
-      puppetdb = PuppetDB::Connection.new(options[:puppetdb_host], options[:puppetdb_port])
-      http = Net::HTTP.new(options[:puppetdb_host], options[:puppetdb_port])
-      http.use_ssl = true
-      http.verify_mode = OpenSSL::SSL::VERIFY_NONE
-      query = puppetdb.parse_query(query)
-      results = puppetdb.query(server, query, http)
-      resultsParsed = JSON.parse(results)
-      resultsParsed.each do |report|
-        if report[status] != "sucess"
-          puts "${report['timestamp']}:  ${report['containment-path']} ${report['message']}"
-        end
+      puppetdb_url = "http://#{puppetdbhost}:#{puppetdbport}"
+      puppetdb = PuppetDB::Client.new({:server => puppetdb_url})
+
+      results = puppetdb.request('reports',query)
+      results = results.data.last
+      report  = results['hash']
+      eventsQuery = PuppetDB::Query[:'=','report',"#{report}"]
+      events = puppetdb.request('events',eventsQuery)
+      events.data.each do |event|
+        puts event['timestamp']
+        puts event['containment-path']
+        puts event['message']
+        puts event['status']
       end
     else
       puts parsed['statusmsg']

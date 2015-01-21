@@ -25,5 +25,5 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency('rake')
   spec.add_dependency('methadone', '~> 1.8.0')
   spec.add_development_dependency('rspec', '~> 2.99')
-  spec.add_dependency('ruby-puppetdb')
+  spec.add_dependency('puppetdb-ruby')
 end
