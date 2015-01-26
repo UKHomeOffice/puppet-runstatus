@@ -12,35 +12,58 @@ class App
   include Methadone::Main
   include Methadone::CLILogging
 
-  main do |server,puppetdbhost,puppetdbport| # Add args you want: |like,so|
+  main do |server,puppetdbhost,puppetdbport,mode,timer| # Add args you want: |like,so|
     #need to run mcollective to find the last puppet run and status
-    command = "mco rpc puppet status -j -F fqdn=/" << server << "/"
-    runinfo = `#{command}`
-    parsed = JSON.parse(runinfo)
-    parsed = parsed[0]
-    status = parsed['statuscode']
-    status = status.to_i
-    if status != 1; then
-      certname = parsed['sender']
-      query= PuppetDB::Query[:'=','certname',"#{certname}"]
-      #puppet run failed - need to query puppetdb
-      puppetdb_url = "http://#{puppetdbhost}:#{puppetdbport}"
-      puppetdb = PuppetDB::Client.new({:server => puppetdb_url})
-
-      results = puppetdb.request('reports',query)
-      results = results.data.last
-      report  = results['hash']
-      eventsQuery = PuppetDB::Query[:'=','report',"#{report}"]
-      events = puppetdb.request('events',eventsQuery)
-      events.data.each do |event|
-        puts event['timestamp']
-        puts event['containment-path']
-        puts event['message']
-        puts event['status']
+    date = Time.now
+    runtime = date.to_time.to_i
+    puts mode.downcase
+    if mode.downcase == 's'
+      command = "mco rpc puppet status -j -S " << server << ""
+    elsif mode.downcase == 'f'
+      command = "mco rpc puppet status -j -F fqdn=/" << server << "/"
+    end
+    puts command
+    keeprunning = 0
+    while keeprunning == 0 do
+      keeprunning = 1
+      runinfo = `#{command}`
+      parses = JSON.parse(runinfo)
+      parses.each do |parsed|
+        runtimestamp = parsed['data']['lastrun']
+         puts timer
+        if timer.to_i
+          sincelastrun = runtime - runtimestamp
+          if sincelastrun > 120
+            keeprunning = 0
+          end
+        end
+        status = parsed['statuscode']
+        status = status.to_i
+        if status != 0; then
+          certname = parsed['sender']
+          query= PuppetDB::Query[:'=','certname',"#{certname}"]
+          #puppet run failed - need to query puppetdb
+          puppetdb_url = "http://#{puppetdbhost}:#{puppetdbport}"
+          puppetdb = PuppetDB::Client.new({:server => puppetdb_url})
+          results = puppetdb.request('reports',query)
+          results = results.data.last
+          report  = results['hash']
+          eventsQuery = PuppetDB::Query[:'=','report',"#{report}"]
+          events = puppetdb.request('events',eventsQuery)
+          events.data.each do |event|
+            if event['level'] == 'error'
+              puts certname
+              puts event['timestamp']
+              puts event['containment-path']
+              puts event['message']
+              puts event['status']
+            end
+          end
+        else
+          puts parsed['statusmsg']
+        end
       end
-    else
-      puts parsed['statusmsg']
-      exit(status)
+      sleep(timer.to_i)
     end
   end
 
@@ -67,8 +90,10 @@ class App
 
 
   arg :server
-  arg :dbhost
-
+  arg :puppetdbhost
+  arg :dbport
+  arg :mode, :optional
+  arg :timerm, :optional 
 #  version Puppet::Runstatus::VERSION
 
   use_log_level_option :toggle_debug_on_signal => 'USR1'
